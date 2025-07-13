@@ -143,6 +143,9 @@ public class HealthServicesDbContext : DbContext
 
     private static void SeedData(ModelBuilder modelBuilder)
     {
+        // Use a static DateTime for seed data to avoid model changes
+        var seedDateTime = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
         // Seed Specialties
         modelBuilder
             .Entity<Specialty>()
@@ -152,70 +155,70 @@ public class HealthServicesDbContext : DbContext
                     Id = 1,
                     Name = "Cardiology",
                     Description = "Heart and cardiovascular system",
-                    CreatedAt = DateTime.UtcNow,
+                    CreatedAt = seedDateTime,
                 },
                 new Specialty
                 {
                     Id = 2,
                     Name = "Dermatology",
                     Description = "Skin, hair, and nail disorders",
-                    CreatedAt = DateTime.UtcNow,
+                    CreatedAt = seedDateTime,
                 },
                 new Specialty
                 {
                     Id = 3,
                     Name = "Neurology",
                     Description = "Nervous system disorders",
-                    CreatedAt = DateTime.UtcNow,
+                    CreatedAt = seedDateTime,
                 },
                 new Specialty
                 {
                     Id = 4,
                     Name = "Orthopedics",
                     Description = "Musculoskeletal system",
-                    CreatedAt = DateTime.UtcNow,
+                    CreatedAt = seedDateTime,
                 },
                 new Specialty
                 {
                     Id = 5,
                     Name = "Pediatrics",
                     Description = "Child healthcare",
-                    CreatedAt = DateTime.UtcNow,
+                    CreatedAt = seedDateTime,
                 },
                 new Specialty
                 {
                     Id = 6,
                     Name = "Psychiatry",
                     Description = "Mental health disorders",
-                    CreatedAt = DateTime.UtcNow,
+                    CreatedAt = seedDateTime,
                 },
                 new Specialty
                 {
                     Id = 7,
                     Name = "General Practice",
                     Description = "Primary healthcare",
-                    CreatedAt = DateTime.UtcNow,
+                    CreatedAt = seedDateTime,
                 },
                 new Specialty
                 {
                     Id = 8,
                     Name = "Oncology",
                     Description = "Cancer treatment",
-                    CreatedAt = DateTime.UtcNow,
+                    CreatedAt = seedDateTime,
                 },
                 new Specialty
                 {
                     Id = 9,
                     Name = "Gynecology",
                     Description = "Women's health",
-                    CreatedAt = DateTime.UtcNow,
+                    CreatedAt = seedDateTime,
                 },
                 new Specialty
                 {
                     Id = 10,
                     Name = "Ophthalmology",
                     Description = "Eye and vision care",
-                    CreatedAt = DateTime.UtcNow,
+                    CreatedAt = seedDateTime,
                 }
             );
     }

@@ -1,0 +1,48 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    container_name: healthservices-postgres
+    environment:
+      POSTGRES_DB: HealthServicesDb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - healthservices-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # .NET API Application
+  api:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: healthservices-api
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=postgres;Database=HealthServicesDb;Username=postgres;Password=postgres
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - healthservices-network
+    volumes:
+      - ./HealthServices.Api/logs:/app/logs
+    restart: unless-stopped
+
+networks:
+  healthservices-network:
+    driver: bridge
+
+volumes:
+  postgres_data: 

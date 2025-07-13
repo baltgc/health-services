@@ -110,9 +110,11 @@ Layered Architecture is an excellent choice for this healthcare management syste
 
 - .NET 9.0 SDK
 - Visual Studio 2022 or VS Code with C# extension
-- SQL Server (for future database implementation)
+- Docker Desktop (recommended) or PostgreSQL server
 
-### Installation
+### Installation Methods
+
+#### Option 1: Using Docker (Recommended)
 
 1. Clone the repository:
    ```bash
@@ -120,22 +122,55 @@ Layered Architecture is an excellent choice for this healthcare management syste
    cd health-services
    ```
 
-2. Restore NuGet packages:
+2. Build and run with Docker Compose:
+   ```bash
+   # Windows PowerShell
+   .\docker-build.ps1
+
+   # Linux/Mac or Windows with WSL
+   ./docker-build.sh
+
+   # Or manually with docker-compose
+   docker-compose up --build
+   ```
+
+3. Access the application:
+   - **API Documentation**: `http://localhost:8080/swagger`
+   - **Health Check**: `http://localhost:8080/health`
+   - **PostgreSQL Database**: `localhost:5432`
+
+#### Option 2: Local Development
+
+1. Clone the repository:
+   ```bash
+   git clone <repository-url>
+   cd health-services
+   ```
+
+2. Start PostgreSQL (using Docker):
+   ```bash
+   docker run --name healthservices-postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=HealthServicesDb_Dev -p 5432:5432 -d postgres:15
+   ```
+
+3. Update connection string in `appsettings.Development.json`
+
+4. Restore NuGet packages:
    ```bash
    dotnet restore
    ```
 
-3. Build the solution:
+5. Apply database migrations:
    ```bash
-   dotnet build
+   dotnet ef database update --project ./HealthServices.Infrastructure --startup-project ./HealthServices.Api
    ```
 
-4. Run the application:
+6. Build and run the application:
    ```bash
+   dotnet build
    dotnet run --project HealthServices.Api
    ```
 
-5. Access the API documentation:
+7. Access the API documentation:
    - Development: `https://localhost:7292/swagger`
    - Alternative: `http://localhost:5292/swagger`
 
@@ -266,6 +301,58 @@ The application is in early development stage with the following implemented:
    - Comprehensive unit test coverage
    - Integration testing setup
    - Performance testing and optimization
+
+## Docker Deployment
+
+### Docker Files
+
+- **`Dockerfile`**: Multi-stage build for the .NET API application
+- **`docker-compose.yml`**: Orchestrates API and PostgreSQL services
+- **`docker-compose.override.yml`**: Development-specific overrides
+- **`.dockerignore`**: Excludes unnecessary files from build context
+
+### Docker Commands
+
+```bash
+# Build and run all services
+docker-compose up --build
+
+# Run in background
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop services
+docker-compose down
+
+# Rebuild without cache
+docker-compose build --no-cache
+
+# Run database migrations in container
+docker-compose exec api dotnet ef database update --project ./HealthServices.Infrastructure
+```
+
+### Production Deployment
+
+For production deployment, create a `docker-compose.prod.yml`:
+
+```yaml
+services:
+  api:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Host=postgres;Database=HealthServicesDb;Username=postgres;Password=${POSTGRES_PASSWORD}
+    restart: always
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    restart: always
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+volumes:
+  postgres_prod_data:
+```
 
 ## Contributing
 
