@@ -1,0 +1,11 @@
+E:\.NET\health-services\HealthServices.Domain\bin\Debug\net9.0\HealthServices.Domain.deps.json
+E:\.NET\health-services\HealthServices.Domain\bin\Debug\net9.0\HealthServices.Domain.dll
+E:\.NET\health-services\HealthServices.Domain\bin\Debug\net9.0\HealthServices.Domain.pdb
+E:\.NET\health-services\HealthServices.Domain\obj\Debug\net9.0\HealthServices.Domain.GeneratedMSBuildEditorConfig.editorconfig
+E:\.NET\health-services\HealthServices.Domain\obj\Debug\net9.0\HealthServices.Domain.AssemblyInfoInputs.cache
+E:\.NET\health-services\HealthServices.Domain\obj\Debug\net9.0\HealthServices.Domain.AssemblyInfo.cs
+E:\.NET\health-services\HealthServices.Domain\obj\Debug\net9.0\HealthServices.Domain.csproj.CoreCompileInputs.cache
+E:\.NET\health-services\HealthServices.Domain\obj\Debug\net9.0\HealthServices.Domain.dll
+E:\.NET\health-services\HealthServices.Domain\obj\Debug\net9.0\refint\HealthServices.Domain.dll
+E:\.NET\health-services\HealthServices.Domain\obj\Debug\net9.0\HealthServices.Domain.pdb
+E:\.NET\health-services\HealthServices.Domain\obj\Debug\net9.0\ref\HealthServices.Domain.dll
