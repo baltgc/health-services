@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using HealthServices.Domain.Enums;
 
 namespace HealthServices.Domain.Entities;
 
@@ -19,14 +20,11 @@ public class User
     [EmailAddress]
     public string Email { get; set; } = string.Empty;
 
-    [Required]
     [MaxLength(20)]
     public string PhoneNumber { get; set; } = string.Empty;
 
-    [Required]
-    public DateTime DateOfBirth { get; set; }
+    public DateTime? DateOfBirth { get; set; }
 
-    [Required]
     [MaxLength(10)]
     public string Gender { get; set; } = string.Empty;
 
@@ -45,6 +43,25 @@ public class User
     [MaxLength(50)]
     public string Country { get; set; } = string.Empty;
 
+    // Authentication properties
+    [MaxLength(100)]
+    public string GoogleId { get; set; } = string.Empty;
+
+    [MaxLength(1000)]
+    public string? GoogleAccessToken { get; set; }
+
+    [MaxLength(1000)]
+    public string? GoogleRefreshToken { get; set; }
+
+    [MaxLength(500)]
+    public string? ProfilePictureUrl { get; set; }
+
+    [Required]
+    public UserRole Role { get; set; } = UserRole.Patient;
+
+    [Required]
+    public bool IsEmailVerified { get; set; } = true; // Google emails are verified by default
+
     [Required]
     public bool IsActive { get; set; } = true;
 
@@ -53,14 +70,18 @@ public class User
 
     public DateTime? UpdatedAt { get; set; }
 
+    public DateTime? LastLoginAt { get; set; }
+
     // Navigation properties
     public PatientProfile? PatientProfile { get; set; }
     public DoctorProfile? DoctorProfile { get; set; }
 
     // Computed properties
     public string FullName => $"{FirstName} {LastName}";
-    public int Age =>
-        DateTime.Now.Year
-        - DateOfBirth.Year
-        - (DateTime.Now.DayOfYear < DateOfBirth.DayOfYear ? 1 : 0);
+    public int? Age =>
+        DateOfBirth.HasValue
+            ? DateTime.Now.Year
+                - DateOfBirth.Value.Year
+                - (DateTime.Now.DayOfYear < DateOfBirth.Value.DayOfYear ? 1 : 0)
+            : null;
 }
