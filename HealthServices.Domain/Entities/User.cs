@@ -56,6 +56,13 @@ public class User
     [MaxLength(500)]
     public string? ProfilePictureUrl { get; set; }
 
+    // Native authentication properties
+    [MaxLength(255)]
+    public string? PasswordHash { get; set; }
+
+    [MaxLength(128)]
+    public string? PasswordSalt { get; set; }
+
     [Required]
     public UserRole Role { get; set; } = UserRole.Patient;
 

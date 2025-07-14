@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using HealthServices.Application.DTOs;
+using HealthServices.Application.Services;
 using HealthServices.Domain.Entities;
 using HealthServices.Domain.Enums;
 using HealthServices.Infrastructure.DbContexts;
@@ -17,16 +18,19 @@ public class AuthenticationService : HealthServices.Application.Services.IAuthen
     private readonly HealthServicesDbContext _context;
     private readonly IConfiguration _configuration;
     private readonly ILogger<AuthenticationService> _logger;
+    private readonly IPasswordService _passwordService;
 
     public AuthenticationService(
         HealthServicesDbContext context,
         IConfiguration configuration,
-        ILogger<AuthenticationService> logger
+        ILogger<AuthenticationService> logger,
+        IPasswordService passwordService
     )
     {
         _context = context;
         _configuration = configuration;
         _logger = logger;
+        _passwordService = passwordService;
     }
 
     public async Task<AuthResultDto> HandleGoogleAuthenticationAsync(IEnumerable<Claim> claims)
@@ -300,5 +304,389 @@ public class AuthenticationService : HealthServices.Application.Services.IAuthen
     private int GetJwtExpiryMinutes()
     {
         return int.Parse(_configuration["Authentication:Jwt:ExpiryInMinutes"] ?? "60");
+    }
+
+    // Native authentication methods
+    public async Task<AuthResultDto> RegisterAsync(RegisterRequestDto request)
+    {
+        try
+        {
+            // Validate request
+            if (
+                string.IsNullOrWhiteSpace(request.Email)
+                || string.IsNullOrWhiteSpace(request.Password)
+            )
+            {
+                return new AuthResultDto
+                {
+                    IsSuccess = false,
+                    ErrorMessage = "Email and password are required",
+                };
+            }
+
+            if (request.Password != request.ConfirmPassword)
+            {
+                return new AuthResultDto
+                {
+                    IsSuccess = false,
+                    ErrorMessage = "Passwords do not match",
+                };
+            }
+
+            if (request.Password.Length < 8)
+            {
+                return new AuthResultDto
+                {
+                    IsSuccess = false,
+                    ErrorMessage = "Password must be at least 8 characters long",
+                };
+            }
+
+            // Check if user already exists
+            var existingUser = await _context.Users.FirstOrDefaultAsync(u =>
+                u.Email == request.Email
+            );
+            if (existingUser != null)
+            {
+                return new AuthResultDto
+                {
+                    IsSuccess = false,
+                    ErrorMessage = "User with this email already exists",
+                };
+            }
+
+            // Create new user
+            var user = new User
+            {
+                Email = request.Email,
+                FirstName = request.FirstName,
+                LastName = request.LastName,
+                PhoneNumber = request.PhoneNumber ?? string.Empty,
+                DateOfBirth = request.DateOfBirth,
+                Gender = request.Gender ?? string.Empty,
+                Address = request.Address ?? string.Empty,
+                City = request.City ?? string.Empty,
+                State = request.State ?? string.Empty,
+                ZipCode = request.ZipCode ?? string.Empty,
+                Country = request.Country ?? string.Empty,
+                PasswordHash = _passwordService.HashPassword(request.Password),
+                PasswordSalt = _passwordService.GenerateSalt(),
+                Role = UserRole.Patient,
+                IsEmailVerified = false, // Will need email verification for native auth
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+            };
+
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
+
+            // Generate JWT token
+            var token = GenerateJwtToken(user);
+            var expiresAt = DateTime.UtcNow.AddMinutes(GetJwtExpiryMinutes());
+
+            return new AuthResultDto
+            {
+                IsSuccess = true,
+                LoginResponse = new LoginResponseDto
+                {
+                    Token = token,
+                    User = MapUserToDto(user),
+                    ExpiresAt = expiresAt,
+                },
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during user registration");
+            return new AuthResultDto
+            {
+                IsSuccess = false,
+                ErrorMessage = "An error occurred during registration",
+            };
+        }
+    }
+
+    public async Task<AuthResultDto> LoginAsync(LoginRequestDto request)
+    {
+        try
+        {
+            if (
+                string.IsNullOrWhiteSpace(request.Email)
+                || string.IsNullOrWhiteSpace(request.Password)
+            )
+            {
+                return new AuthResultDto
+                {
+                    IsSuccess = false,
+                    ErrorMessage = "Email and password are required",
+                };
+            }
+
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
+            if (user == null)
+            {
+                return new AuthResultDto
+                {
+                    IsSuccess = false,
+                    ErrorMessage = "Invalid email or password",
+                };
+            }
+
+            if (!user.IsActive)
+            {
+                return new AuthResultDto
+                {
+                    IsSuccess = false,
+                    ErrorMessage = "Account is deactivated",
+                };
+            }
+
+            if (string.IsNullOrEmpty(user.PasswordHash))
+            {
+                return new AuthResultDto
+                {
+                    IsSuccess = false,
+                    ErrorMessage = "Invalid email or password",
+                };
+            }
+
+            if (
+                !_passwordService.VerifyPassword(
+                    request.Password,
+                    user.PasswordHash,
+                    user.PasswordSalt ?? string.Empty
+                )
+            )
+            {
+                return new AuthResultDto
+                {
+                    IsSuccess = false,
+                    ErrorMessage = "Invalid email or password",
+                };
+            }
+
+            // Update last login
+            user.LastLoginAt = DateTime.UtcNow;
+            user.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            // Generate JWT token
+            var token = GenerateJwtToken(user);
+            var expiresAt = DateTime.UtcNow.AddMinutes(GetJwtExpiryMinutes());
+
+            return new AuthResultDto
+            {
+                IsSuccess = true,
+                LoginResponse = new LoginResponseDto
+                {
+                    Token = token,
+                    User = MapUserToDto(user),
+                    ExpiresAt = expiresAt,
+                },
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during login");
+            return new AuthResultDto
+            {
+                IsSuccess = false,
+                ErrorMessage = "An error occurred during login",
+            };
+        }
+    }
+
+    public async Task<AuthResultDto> ChangePasswordAsync(
+        int userId,
+        ChangePasswordRequestDto request
+    )
+    {
+        try
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
+            if (user == null)
+            {
+                return new AuthResultDto { IsSuccess = false, ErrorMessage = "User not found" };
+            }
+
+            if (string.IsNullOrEmpty(user.PasswordHash))
+            {
+                return new AuthResultDto
+                {
+                    IsSuccess = false,
+                    ErrorMessage = "User does not have a password set",
+                };
+            }
+
+            if (
+                !_passwordService.VerifyPassword(
+                    request.CurrentPassword,
+                    user.PasswordHash,
+                    user.PasswordSalt ?? string.Empty
+                )
+            )
+            {
+                return new AuthResultDto
+                {
+                    IsSuccess = false,
+                    ErrorMessage = "Current password is incorrect",
+                };
+            }
+
+            if (request.NewPassword != request.ConfirmNewPassword)
+            {
+                return new AuthResultDto
+                {
+                    IsSuccess = false,
+                    ErrorMessage = "New passwords do not match",
+                };
+            }
+
+            if (request.NewPassword.Length < 8)
+            {
+                return new AuthResultDto
+                {
+                    IsSuccess = false,
+                    ErrorMessage = "New password must be at least 8 characters long",
+                };
+            }
+
+            user.PasswordHash = _passwordService.HashPassword(request.NewPassword);
+            user.PasswordSalt = _passwordService.GenerateSalt();
+            user.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            return new AuthResultDto
+            {
+                IsSuccess = true,
+                LoginResponse = new LoginResponseDto
+                {
+                    Token = GenerateJwtToken(user),
+                    User = MapUserToDto(user),
+                    ExpiresAt = DateTime.UtcNow.AddMinutes(GetJwtExpiryMinutes()),
+                },
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error changing password for user {UserId}", userId);
+            return new AuthResultDto
+            {
+                IsSuccess = false,
+                ErrorMessage = "An error occurred while changing password",
+            };
+        }
+    }
+
+    public async Task<AuthResultDto> ForgotPasswordAsync(ForgotPasswordRequestDto request)
+    {
+        try
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
+            if (user == null)
+            {
+                // Don't reveal if user exists or not for security
+                return new AuthResultDto { IsSuccess = true, LoginResponse = null };
+            }
+
+            // TODO: Implement email service to send password reset email
+            // For now, just return success
+            _logger.LogInformation("Password reset requested for user {Email}", request.Email);
+
+            return new AuthResultDto { IsSuccess = true, LoginResponse = null };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during forgot password for {Email}", request.Email);
+            return new AuthResultDto
+            {
+                IsSuccess = false,
+                ErrorMessage = "An error occurred while processing the request",
+            };
+        }
+    }
+
+    public async Task<AuthResultDto> ResetPasswordAsync(ResetPasswordRequestDto request)
+    {
+        try
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
+            if (user == null)
+            {
+                return new AuthResultDto
+                {
+                    IsSuccess = false,
+                    ErrorMessage = "Invalid reset token or email",
+                };
+            }
+
+            if (request.NewPassword != request.ConfirmNewPassword)
+            {
+                return new AuthResultDto
+                {
+                    IsSuccess = false,
+                    ErrorMessage = "New passwords do not match",
+                };
+            }
+
+            if (request.NewPassword.Length < 8)
+            {
+                return new AuthResultDto
+                {
+                    IsSuccess = false,
+                    ErrorMessage = "New password must be at least 8 characters long",
+                };
+            }
+
+            // TODO: Validate reset token
+            // For now, just update the password
+            user.PasswordHash = _passwordService.HashPassword(request.NewPassword);
+            user.PasswordSalt = _passwordService.GenerateSalt();
+            user.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            return new AuthResultDto
+            {
+                IsSuccess = true,
+                LoginResponse = new LoginResponseDto
+                {
+                    Token = GenerateJwtToken(user),
+                    User = MapUserToDto(user),
+                    ExpiresAt = DateTime.UtcNow.AddMinutes(GetJwtExpiryMinutes()),
+                },
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error resetting password for {Email}", request.Email);
+            return new AuthResultDto
+            {
+                IsSuccess = false,
+                ErrorMessage = "An error occurred while resetting password",
+            };
+        }
+    }
+
+    public async Task<bool> ValidatePasswordAsync(string email, string password)
+    {
+        try
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+            if (user == null || string.IsNullOrEmpty(user.PasswordHash))
+            {
+                return false;
+            }
+
+            return _passwordService.VerifyPassword(
+                password,
+                user.PasswordHash,
+                user.PasswordSalt ?? string.Empty
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error validating password for {Email}", email);
+            return false;
+        }
     }
 }

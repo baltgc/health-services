@@ -143,6 +143,113 @@ public class AuthController : ControllerBase
         return Ok(new { token = newToken, expiresAt });
     }
 
+    /// <summary>
+    /// Register a new user with native authentication
+    /// </summary>
+    [HttpPost("register")]
+    public async Task<IActionResult> Register([FromBody] HealthServices.Application.DTOs.RegisterRequestDto request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        var result = await _authService.RegisterAsync(request);
+        if (!result.IsSuccess)
+        {
+            return BadRequest(new { error = result.ErrorMessage });
+        }
+
+        return Ok(result.LoginResponse);
+    }
+
+    /// <summary>
+    /// Login with native authentication
+    /// </summary>
+    [HttpPost("login")]
+    public async Task<IActionResult> Login([FromBody] HealthServices.Application.DTOs.LoginRequestDto request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        var result = await _authService.LoginAsync(request);
+        if (!result.IsSuccess)
+        {
+            return BadRequest(new { error = result.ErrorMessage });
+        }
+
+        return Ok(result.LoginResponse);
+    }
+
+    /// <summary>
+    /// Change password for authenticated user
+    /// </summary>
+    [HttpPost("change-password")]
+    [Authorize]
+    public async Task<IActionResult> ChangePassword([FromBody] HealthServices.Application.DTOs.ChangePasswordRequestDto request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        var userId = GetUserIdFromClaims();
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
+        var result = await _authService.ChangePasswordAsync(userId.Value, request);
+        if (!result.IsSuccess)
+        {
+            return BadRequest(new { error = result.ErrorMessage });
+        }
+
+        return Ok(result.LoginResponse);
+    }
+
+    /// <summary>
+    /// Request password reset
+    /// </summary>
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword([FromBody] HealthServices.Application.DTOs.ForgotPasswordRequestDto request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        var result = await _authService.ForgotPasswordAsync(request);
+        if (!result.IsSuccess)
+        {
+            return BadRequest(new { error = result.ErrorMessage });
+        }
+
+        return Ok(new { message = "If the email exists, a password reset link has been sent" });
+    }
+
+    /// <summary>
+    /// Reset password with token
+    /// </summary>
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword([FromBody] HealthServices.Application.DTOs.ResetPasswordRequestDto request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        var result = await _authService.ResetPasswordAsync(request);
+        if (!result.IsSuccess)
+        {
+            return BadRequest(new { error = result.ErrorMessage });
+        }
+
+        return Ok(result.LoginResponse);
+    }
+
 #if DEBUG
     /// <summary>
     /// Generate test JWT token for development/testing (DEBUG only)

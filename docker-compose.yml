@@ -1,23 +1,46 @@
 services:
   # PostgreSQL Database
   postgres:
-    image: postgres:15
+    image: postgres:15-alpine
     container_name: healthservices-postgres
     environment:
       POSTGRES_DB: HealthServicesDb
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./docker-data/postgres/init:/docker-entrypoint-initdb.d
     networks:
       - healthservices-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d HealthServicesDb"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # Migration Service (for manual migration runs)
+  migrations:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: healthservices-migrations
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - DOTNET_RUNNING_IN_CONTAINER=true
+      - ConnectionStrings__DefaultConnection=Host=postgres;Database=HealthServicesDb;Username=postgres;Password=postgres;Port=5432
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - healthservices-network
+    command: ["dotnet", "ef", "database", "update", "--project", "HealthServices.Infrastructure", "--startup-project", "HealthServices.Api", "--verbose"]
+    profiles:
+      - manual-migrations
 
   # .NET API Application
   api:
@@ -27,10 +50,11 @@ services:
     container_name: healthservices-api
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__DefaultConnection=Host=postgres;Database=HealthServicesDb;Username=postgres;Password=postgres
+      - DOTNET_RUNNING_IN_CONTAINER=true
+      - ConnectionStrings__DefaultConnection=Host=postgres;Database=HealthServicesDb;Username=postgres;Password=postgres;Port=5432
+      - ASPNETCORE_URLS=http://+:8080
     ports:
       - "8080:8080"
-      - "8081:8081"
     depends_on:
       postgres:
         condition: service_healthy
@@ -38,11 +62,19 @@ services:
       - healthservices-network
     volumes:
       - ./HealthServices.Api/logs:/app/logs
+      - ./logs:/app/logs
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
 networks:
   healthservices-network:
     driver: bridge
 
 volumes:
-  postgres_data: 
+  postgres_data:
+    driver: local 

@@ -36,6 +36,7 @@ builder.Services.AddScoped<
     IAuthenticationService,
     HealthServices.Infrastructure.Services.AuthenticationService
 >();
+builder.Services.AddScoped<IPasswordService, HealthServices.Infrastructure.Services.PasswordService>();
 
 // Authentication & Authorization
 builder
@@ -153,7 +154,10 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 // Authentication & Authorization middleware
 app.UseAuthentication();

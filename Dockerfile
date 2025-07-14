@@ -18,14 +18,16 @@ RUN dotnet restore
 COPY . ./
 
 # Build and publish the application
-RUN dotnet publish HealthServices.Api/HealthServices.Api.csproj -c Release -o out
+RUN dotnet publish HealthServices.Api/HealthServices.Api.csproj -c Release -o out --no-restore
 
 # Use the official .NET runtime image for running the application
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
 WORKDIR /app
 
-# Install curl for health checks
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+# Install curl for health checks and other utilities
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy the published application
 COPY --from=build-env /app/out .
@@ -36,14 +38,14 @@ USER appuser
 
 # Expose ports
 EXPOSE 8080
-EXPOSE 8081
 
 # Set environment variables
-ENV ASPNETCORE_URLS=http://+:8080;https://+:8081
+ENV ASPNETCORE_URLS=http://+:8080
 ENV ASPNETCORE_ENVIRONMENT=Production
+ENV DOTNET_RUNNING_IN_CONTAINER=true
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 
 # Entry point

@@ -18,4 +18,12 @@ public interface IAuthenticationService
     Task<IEnumerable<UserDto>> GetUsersByRoleAsync(UserRole role);
     string GenerateJwtToken(User user);
     Task<bool> LogoutUserAsync(int userId);
+
+    // Native authentication methods
+    Task<AuthResultDto> RegisterAsync(RegisterRequestDto request);
+    Task<AuthResultDto> LoginAsync(LoginRequestDto request);
+    Task<AuthResultDto> ChangePasswordAsync(int userId, ChangePasswordRequestDto request);
+    Task<AuthResultDto> ForgotPasswordAsync(ForgotPasswordRequestDto request);
+    Task<AuthResultDto> ResetPasswordAsync(ResetPasswordRequestDto request);
+    Task<bool> ValidatePasswordAsync(string email, string password);
 }
