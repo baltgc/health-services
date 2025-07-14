@@ -13,7 +13,7 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace HealthServices.Infrastructure.Services;
 
-public class AuthenticationService : HealthServices.Application.Services.IAuthenticationService
+public class AuthenticationService : IAuthenticationService
 {
     private readonly HealthServicesDbContext _context;
     private readonly IConfiguration _configuration;
@@ -687,6 +687,82 @@ public class AuthenticationService : HealthServices.Application.Services.IAuthen
         {
             _logger.LogError(ex, "Error validating password for {Email}", email);
             return false;
+        }
+    }
+
+    public async Task<AuthResultDto> RefreshTokenAsync(int userId)
+    {
+        try
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
+            if (user == null)
+            {
+                return new AuthResultDto { IsSuccess = false, ErrorMessage = "User not found" };
+            }
+
+            var token = GenerateJwtToken(user);
+            var expiresAt = DateTime.UtcNow.AddMinutes(GetJwtExpiryMinutes());
+
+            return new AuthResultDto
+            {
+                IsSuccess = true,
+                LoginResponse = new LoginResponseDto
+                {
+                    Token = token,
+                    User = MapUserToDto(user),
+                    ExpiresAt = expiresAt,
+                },
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error refreshing token for user {UserId}", userId);
+            return new AuthResultDto
+            {
+                IsSuccess = false,
+                ErrorMessage = "An error occurred while refreshing the token",
+            };
+        }
+    }
+
+    public async Task<AuthResultDto> GenerateTestTokenAsync(UserDto userDto)
+    {
+        try
+        {
+            // Create a temporary user entity for token generation
+            var user = new User
+            {
+                Id = userDto.Id,
+                Email = userDto.Email,
+                FirstName = userDto.FirstName,
+                LastName = userDto.LastName,
+                Role = Enum.Parse<UserRole>(userDto.Role),
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+            };
+
+            var token = GenerateJwtToken(user);
+            var expiresAt = DateTime.UtcNow.AddMinutes(GetJwtExpiryMinutes());
+
+            return new AuthResultDto
+            {
+                IsSuccess = true,
+                LoginResponse = new LoginResponseDto
+                {
+                    Token = token,
+                    User = userDto,
+                    ExpiresAt = expiresAt,
+                },
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating test token for user {Email}", userDto.Email);
+            return new AuthResultDto
+            {
+                IsSuccess = false,
+                ErrorMessage = "An error occurred while generating the test token",
+            };
         }
     }
 }

@@ -1,4 +1,4 @@
-using HealthServices.Application.Services;
+using HealthServices.Application.DTOs;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Authorization;
@@ -125,29 +125,21 @@ public class AuthController : ControllerBase
             return NotFound(new { error = "User not found" });
         }
 
-        // For simplicity, we'll just generate a new token
-        // In a production app, you might want to implement proper refresh token logic
-        var userEntity = new HealthServices.Domain.Entities.User
+        // Delegate token refresh to the service layer
+        var refreshResult = await _authService.RefreshTokenAsync(userId.Value);
+        if (!refreshResult.IsSuccess)
         {
-            Id = user.Id,
-            Email = user.Email,
-            FirstName = user.FirstName,
-            LastName = user.LastName,
-            GoogleId = "", // This would be stored in the user data
-            Role = Enum.Parse<HealthServices.Domain.Enums.UserRole>(user.Role),
-        };
+            return BadRequest(new { error = refreshResult.ErrorMessage });
+        }
 
-        var newToken = _authService.GenerateJwtToken(userEntity);
-        var expiresAt = DateTime.UtcNow.AddMinutes(60); // Should match JWT expiry setting
-
-        return Ok(new { token = newToken, expiresAt });
+        return Ok(refreshResult.LoginResponse);
     }
 
     /// <summary>
     /// Register a new user with native authentication
     /// </summary>
     [HttpPost("register")]
-    public async Task<IActionResult> Register([FromBody] HealthServices.Application.DTOs.RegisterRequestDto request)
+    public async Task<IActionResult> Register([FromBody] RegisterRequestDto request)
     {
         if (!ModelState.IsValid)
         {
@@ -167,7 +159,7 @@ public class AuthController : ControllerBase
     /// Login with native authentication
     /// </summary>
     [HttpPost("login")]
-    public async Task<IActionResult> Login([FromBody] HealthServices.Application.DTOs.LoginRequestDto request)
+    public async Task<IActionResult> Login([FromBody] LoginRequestDto request)
     {
         if (!ModelState.IsValid)
         {
@@ -188,7 +180,7 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpPost("change-password")]
     [Authorize]
-    public async Task<IActionResult> ChangePassword([FromBody] HealthServices.Application.DTOs.ChangePasswordRequestDto request)
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequestDto request)
     {
         if (!ModelState.IsValid)
         {
@@ -214,7 +206,7 @@ public class AuthController : ControllerBase
     /// Request password reset
     /// </summary>
     [HttpPost("forgot-password")]
-    public async Task<IActionResult> ForgotPassword([FromBody] HealthServices.Application.DTOs.ForgotPasswordRequestDto request)
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequestDto request)
     {
         if (!ModelState.IsValid)
         {
@@ -234,7 +226,7 @@ public class AuthController : ControllerBase
     /// Reset password with token
     /// </summary>
     [HttpPost("reset-password")]
-    public async Task<IActionResult> ResetPassword([FromBody] HealthServices.Application.DTOs.ResetPasswordRequestDto request)
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequestDto request)
     {
         if (!ModelState.IsValid)
         {
@@ -255,38 +247,25 @@ public class AuthController : ControllerBase
     /// Generate test JWT token for development/testing (DEBUG only)
     /// </summary>
     [HttpPost("test-token")]
-    public IActionResult GenerateTestToken([FromBody] TestTokenRequest request)
+    public async Task<IActionResult> GenerateTestToken([FromBody] TestTokenRequest request)
     {
         // This endpoint is only available in DEBUG mode for testing
-        var testUser = new HealthServices.Domain.Entities.User
+        var testUser = new UserDto
         {
             Id = request.UserId ?? 1,
             Email = request.Email ?? "test@example.com",
             FirstName = request.FirstName ?? "Test",
             LastName = request.LastName ?? "User",
-            GoogleId = "test-google-id",
-            Role = Enum.Parse<HealthServices.Domain.Enums.UserRole>(request.Role ?? "Patient"),
+            Role = request.Role ?? "Patient",
         };
 
-        var token = _authService.GenerateJwtToken(testUser);
-        var expiresAt = DateTime.UtcNow.AddMinutes(60);
+        var testResult = await _authService.GenerateTestTokenAsync(testUser);
+        if (!testResult.IsSuccess)
+        {
+            return BadRequest(new { error = testResult.ErrorMessage });
+        }
 
-        return Ok(
-            new
-            {
-                token,
-                user = new
-                {
-                    testUser.Id,
-                    testUser.Email,
-                    testUser.FirstName,
-                    testUser.LastName,
-                    Role = testUser.Role.ToString(),
-                },
-                expiresAt,
-                message = "This is a test token for development only",
-            }
-        );
+        return Ok(testResult.LoginResponse);
     }
 
     public class TestTokenRequest
